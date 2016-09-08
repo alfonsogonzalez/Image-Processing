@@ -6,18 +6,47 @@ import numpy as np
 import argparse
 
 class Pixel:
-    def __init__(self, x, y):
+    def __init__(self, x, y, colors=None):
         self.x = x
         self.y = y
+        self.colors = colors
         self.near_pix = []
 
-    def avg_colors(self):
+    def conv_neg(self, colors):
+        out = []
+        for c in colors:
+            if c > 127:
+                c -= 2*(c - 127)
+            else:
+                c += 2*(127 - c)
+            out.append(c)
+        out = np.array(out)
+        out[out > 255] = 255
+        out[out < 0] = 0
+        return out
+
+    def blur(self, arr, reach):
         r, g, b = [], [], []
-        for pix in self.near_pix:
-            r.append(pix.rgb[0])
-            g.append(pix.rgb[1])
-            b.append(pix.rgb[2])
+        for x in range(self.x - reach, self.x + reach):
+            for y in range(self.y - reach, self.y + reach):
+                try:
+                    _r, _g, _b = arr[y, x]
+                except:
+                    continue
+                r.append(_r)
+                g.append(_g)
+                b.append(_b)
         return [np.average(r), np.average(g), np.average(b)]
+
+    def change_color(self, colors, action): # action = {'r': -20, 'g': 0, 'b': 20}
+        r, g, b = colors
+        r += action['r']
+        g += action['g']
+        b += action['b']
+        rgb = np.array([r, g, b])
+        rgb[rgb > 255] = 255
+        rgb[rgb < 0] = 0
+        return rgb
 
     def dist_from_center(self, center):
         return np.sqrt((self.x - int(center[0]))**2 + (self.y - int(center[1]))**2)
@@ -25,105 +54,49 @@ class Pixel:
     def scale_values(self, rgbs, scale):
         return [f*scale for f in rgbs]
             
-def make_negative(img):
+def make_negative(arr):
     print('Converting to negative...')
-    arr = np.array(Image.open(img))
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            for color in range(arr.shape[2]):
-                value = arr[y, x, color]
-                if arr[y][x][color] < 127:
-                    value += 2*(127 - value)
-                    if value > 255:
-                        arr[y, x, color] = 255
-                    else:
-                        arr[y][x][color] += 2*(127 - arr[y][x][color])
-                elif arr[y][x][color] > 127:
-                    value -= 2*abs((127 - value))
-                    if value < 0:
-                        #print('too low, value =', value)
-                        arr[y, x, color] = 0
-                    else:
-                        arr[y][x][color] -= 2*(arr[y][x][color] - 127)
+            arr[y, x] = Pixel(x, y).conv_neg(arr[y, x, :])
     return arr
 
-def avg_values(img, arr=None):
+def make_bnw(arr):
     print('Converting to black and white...')
-    if arr is None:
-        arr = np.array(Image.open(img))
-    else:
-        arr = arr
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            avg = np.average(arr[y][x])
-            for color in range(arr.shape[2]):
-                arr[y][x][color] = avg
+            avg = arr[y, x, :].mean()
+            arr[y, x] = [avg, avg, avg]
     return arr
 
-def make_arr(img, arr=None): #shape is (534, 800, 3)
-    master_matrix = []
-    row = []
-    if arr is None:
-        arr = np.array(Image.open(img))
-    else:
-        arr = arr
-    for y in range(arr.shape[0]):
-        for x in range(arr.shape[1]):
-            pix = Pixel(x, y)
-            pix.rgb = arr[y][x]
-            row.append(pix)
-        master_matrix.append(row)
-        row = []
-    return np.array(master_matrix), arr
-
-def blur(matrix, arr, reach):
+def blur(arr, reach):
     print('Blurring image...')
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            for i in range(matrix[y][x].x - reach, matrix[y][x].x + reach + 1):
-                for j in range(matrix[y][x].y - reach, matrix[y][x].y + reach + 1):
-                    try:
-                        matrix[y][x].near_pix.append(matrix[j][i])
-                    except:
-                        pass
-            arr[y][x] = matrix[y][x].avg_colors()
+            arr[y, x] = Pixel(x, y).blur(arr, reach)
     return arr
 
-def spotlight(matrix, arr, center, radius):
+def spotlight(arr, center, radius):
     print('Creating spotlight...')
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            dist = matrix[y][x].dist_from_center(center)
+            pix = Pixel(x, y)
+            dist = pix.dist_from_center(center)
             scale = (radius - dist) / radius
             if scale < 0.1:
                 scale = 0.1
-            arr[y][x] = matrix[y][x].scale_values(arr[y][x], scale)
+            arr[y, x] = pix.scale_values(arr[y, x], scale)
     return arr
 
-def brighten(img, amount, arr=None):
+def brighten(arr, amount):
     print('Altering by:', amount)
     if amount > 0:
         print('Brightening image...')
     else:
         print('Darkening image...')
-    if arr is None:
-        arr = np.array(Image.open(img))
-    else:
-        arr = arr
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            for c in range(arr.shape[2]):
-                value = arr[y][x][c]
-                if amount < 0:
-                    if value + amount <= 0:
-                        arr[y][x][c] = 0
-                    else:
-                        arr[y][x][c] += amount
-                else:
-                    if value + amount >= 255:
-                        arr[y][x][c] = 255
-                    else:
-                        arr[y][x][c] += amount
+            arr[y, x] = Pixel(x, y).change_color(arr[y, x], {'r': amount, 'g': amount, 'b': amount})
     return arr
 
 def draw_circle(img, center, inner, outer):
@@ -134,9 +107,18 @@ def draw_circle(img, center, inner, outer):
             if inner < np.sqrt((x - center_x)**2 + (y - center_y)**2) < outer:
                 arr[y, x] = np.array([0, 0, 0], dtype=np.uint8)
     return arr
-    
-     
+
+def alter_colors(arr, action):
+    r, g, b = action[0]
+    action = {'r': int(r), 'g': int(g), 'b': int(b)}
+    for x in range(arr.shape[1]):
+        for y in range(arr.shape[0]):
+            arr[y, x] = Pixel(x, y).change_color(arr[y, x, :], action)
+    return arr
+
 def save_image(arr, output):
     im = Image.fromarray(arr).save(output)
     print('Image saved to', output)
 
+def load_img(img):
+    return np.array(Image.open(img))

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     ap.add_argument('--img', help='image to be processed')
     ap.add_argument('--out', help='name of output file (no extension)')
     ap.add_argument('--neg', action='store_true', help='make negative image')
-    ap.add_argument('--avg', action='store_true', help='average pix values')
+    ap.add_argument('--bnw', action='store_true', help='convert to black and white')
     ap.add_argument('--blur', action='store_true', help='blur picture')
     ap.add_argument('--reach', type=int, default=None, help='reach of neighbors for blur')
     ap.add_argument('--spotlight', action='store_true', help='make spotlight')
@@ -18,38 +18,32 @@ if __name__ == '__main__':
     ap.add_argument('--radius', type=int, help='radius of spotlight in pixels')
     ap.add_argument('--brighten', type=int, help='brighten or darken image by given amount')
     ap.add_argument('--draw-circ', action='store_true', help='draw a cirlce in image')
+    ap.add_argument('--alter-colors', nargs=3, action='append', help='change values of individual colors')
     flags = ap.parse_args()
 
     start = time()
-    second = False
+    arr = proc.load_img(flags.img)
+
     if flags.neg:
-        arr = proc.make_negative(flags.img)
-        second = True
-    if flags.avg:
-        if second:
-            arr = proc.avg_values('img', arr=arr)
-        else:
-            arr = proc.avg_values(flags.img)
-        second = True
-    if flags.blur:
-        if second:
-            matrix, array = proc.make_arr('img', arr=arr)
-        else:    
-            matrix, array = proc.make_arr(flags.img) 
-        arr = proc.blur(matrix, array, flags.reach)
+        arr = proc.make_negative(arr)
+
+    if flags.bnw:
+        arr = proc.make_bnw(arr)
+
+    if flags.alter_colors:
+        arr = proc.alter_colors(arr, flags.alter_colors)
+
+    if flags.blur: 
+        arr = proc.blur(arr, flags.reach)
+
     if flags.spotlight:
-        if second:
-            matrix, array = proc.make_arr('img', arr=arr)
-        else:
-            matrix, array = proc.make_arr(flags.img)
-        arr = proc.spotlight(matrix, array, flags.center[0], flags.radius)
+        arr = proc.spotlight(arr, flags.center[0], flags.radius)
+
     if flags.brighten:
-        if second:
-            arr = proc.brighten('img', flags.brighten, arr=arr)
-        else:
-            arr = proc.brighten(flags.img, flags.brighten)
+        arr = proc.brighten(arr, flags.brighten)
+
     if flags.draw_circ:
         arr = proc.draw_circle(flags.img, flags.center, 55, 60)
 
-    print('Took {} seconds to process'.format(time() - start))
+    print('Took {} seconds to process'.format(time() - start).round(3))
     proc.save_image(arr, flags.out)
