@@ -6,11 +6,9 @@ import numpy as np
 import argparse
 
 class Pixel:
-    def __init__(self, x, y, colors=None):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.colors = colors
-        self.near_pix = []
 
     def conv_neg(self, colors):
         out = []
@@ -40,9 +38,14 @@ class Pixel:
 
     def change_color(self, colors, action): # action = {'r': -20, 'g': 0, 'b': 20}
         r, g, b = colors
-        r += action['r']
-        g += action['g']
-        b += action['b']
+        if action['multiply']:
+            r *= action['r']
+            g *= action['g']
+            b *= action['b']
+        else:
+            r += action['r']
+            g += action['g']
+            b += action['b']
         rgb = np.array([r, g, b])
         rgb[rgb > 255] = 255
         rgb[rgb < 0] = 0
@@ -83,8 +86,8 @@ def spotlight(arr, center, radius):
             pix = Pixel(x, y)
             dist = pix.dist_from_center(center)
             scale = (radius - dist) / radius
-            if scale < 0.1:
-                scale = 0.1
+            if scale < 0.01:
+                scale = 0.01
             arr[y, x] = pix.scale_values(arr[y, x], scale)
     return arr
 
@@ -96,7 +99,7 @@ def brighten(arr, amount):
         print('Darkening image...')
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
-            arr[y, x] = Pixel(x, y).change_color(arr[y, x], {'r': amount, 'g': amount, 'b': amount})
+            arr[y, x] = Pixel(x, y).change_color(arr[y, x], {'r': amount, 'g': amount, 'b': amount, 'multiply': False})
     return arr
 
 def draw_circle(img, center, inner, outer):
@@ -108,12 +111,26 @@ def draw_circle(img, center, inner, outer):
                 arr[y, x] = np.array([0, 0, 0], dtype=np.uint8)
     return arr
 
-def alter_colors(arr, action):
-    r, g, b = action[0]
-    action = {'r': int(r), 'g': int(g), 'b': int(b)}
+def alter_colors(arr, action=None, style=None):
+    styles = {
+    'midwest': {'r': 1, 'g': 0.5, 'b': 0.2, 'multiply': True},
+    }
+    if action is not None:
+        r, g, b = action[0]
+        action = {'r': float(r), 'g': float(g), 'b': float(b), 'multiply': False}
+    else:
+        action = styles[style]
     for x in range(arr.shape[1]):
         for y in range(arr.shape[0]):
             arr[y, x] = Pixel(x, y).change_color(arr[y, x, :], action)
+    return arr
+
+def blur_spotlight(arr, center, radius, reach):
+    center_x, center_y = int(center[0][0]), int(center[0][1])
+    for x in range(640):
+        for y in range(512):
+            if (x - center_x)**2 + (y - center_y)**2 > radius**2:
+                arr[y, x] = Pixel(x, y).blur(arr, reach)
     return arr
 
 def save_image(arr, output):

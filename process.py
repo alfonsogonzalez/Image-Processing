@@ -19,6 +19,7 @@ if __name__ == '__main__':
     ap.add_argument('--brighten', type=int, help='brighten or darken image by given amount')
     ap.add_argument('--draw-circ', action='store_true', help='draw a cirlce in image')
     ap.add_argument('--alter-colors', nargs=3, action='append', help='change values of individual colors')
+    ap.add_argument('--blur-spotlight', action='store_true', help='use for blurring everything except spotlight')
     flags = ap.parse_args()
 
     start = time()
@@ -42,8 +43,11 @@ if __name__ == '__main__':
     if flags.brighten:
         arr = proc.brighten(arr, flags.brighten)
 
+    if flags.blur_spotlight:
+        arr = proc.blur_spotlight(arr, flags.center, flags.radius, flags.reach)
+
     if flags.draw_circ:
         arr = proc.draw_circle(flags.img, flags.center, 55, 60)
 
-    print('Took {} seconds to process'.format(time() - start).round(3))
+    print('Took {} seconds to process'.format((time() - start)))
     proc.save_image(arr, flags.out)
